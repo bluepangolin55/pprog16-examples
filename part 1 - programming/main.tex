@@ -1,0 +1,956 @@
+\documentclass{scrreprt}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{listings}
+\usepackage{algorithmic}
+\usepackage{tikz}
+\usepackage{comment}
+\usetikzlibrary{er}
+\usetikzlibrary{automata,arrows,topaths,positioning}
+
+\title{An Introduction To Parallel Programming}
+\author{Dimitri Stanojevic}
+\date{July 2014}
+\begin{document}
+
+\maketitle
+\tableofcontents
+
+%\part{Programming}
+
+\chapter{Assembly Programming}
+Before we dive into more high-level languages like C, Java, Python, etc. I want to first go over the root of computer programming, the programming language closest to machine instructions, Assembly. Nowadays Assembly is not really intended for actual programming of larger software because its very unintuitive and extremely hard to read. Also it is very hard to express even simple statements like printing some letters onto the screen. However Assembly is what's actually under the hood of any other programming language that is compiled to machine code. This is because Assembly in fact is a one to one translation from machine code to human readable text. This simply means that we can read and understand single assembly instructions easily. The problem with Assembly programs however is that even simple programs need lots of lines, where the instructions look all more or less the same. This chapter is therefore coupled with the chapter about computer hardware. \\
+It's important to remark that the assembly language of every computer system has some differences. Therefore Assembly is not a programming to itself. It is rather a kind of programming languages. In this chapter we will look at Intel x86 assemlby as it is todays most popular computer architecture for desktop and laptop computers. Mobile devices often use AMD chips, which are more energy efficent and have a reduced instruction set. So if you write an x86 Assembly program, it will probably not run on other processors as they may not have the instructions you used in the program. \\
+Also in x86 Assembly there is a difference between 32-bit and 64-bit architectures, because 64-bit architectures support instructions that 32-bit architectures don't. An obvious example would be summing up two 64-bit values. \\
+
+\section{A short introduction of what you should know about hardware}
+We start with the fact that the Assembly language has a very limited set of instructions. You can think of these as the most basic things your computer can do. Within an Assembly program you specify a sequence of such instructions and when your computer runs the proram, it will read and evaluate one instruction after the other. \\
+To understand what these instructions do, we need to have an abstract view of where the computer stores its numerical values. First the processor itself has a few memory units and can hold about 20 values close to itself. We call these memory slots \textit{registers} Then there is what we call \textit{main memory} or \textit{RAM (random access memory)}. The main memory can hold maybe 4GB of values that can be accessed by the processor at any time. The main memory is further away from the processor and looking up values from the main memory takes much more time than looking them up in one of the processors registers. \\
+Now a processors instructions are basically ways to manipulate values that are stored either in the registers or in main memory. The most basic instructions are moving a value from main memory into a register, moving a value from a register back to main memory, adding two values together, subtracting a value from another, etc. \\
+When we want to express such an instruction concerning registers or values in main memory, we need a way to specify which register or which location in memory we mean. \\
+
+As there are very few registers inside a processor, we have individual names for them: \%eax, \%ebx, \%esp, etc. The '\%' sign is just part of the syntax to specify a register. Some registers have a special use and we will cover that later. \\
+
+To address the main memory, we use addresses which are simply numbers ranging from zero to the amount of memory we have. In 32-bit Assembly an address is a 32-bit value. Every address specifies a certain byte in memory. If you think about it, you will see why you cannot use more than 4GB of RAM in a 32-bit Computer. Therefore in 64-bit Systems, every address is a 64-bit value which leads to a much much bigger address space. \\
+
+Just before we go on with the specific registers an instructions, I want to show you a short example assembly program so you get a feeling of what we are talking about. You don't have to be able to read the program yet, but you may come back and look at it from time to time as you read more about registers and instructions. Maybe you can already guess what it does. Tipp: The end result is stored in the register \%eax.
+
+
+
+\begin{lstlisting}
+
+		movl $1, %ebx
+		movl $0, %eax
+
+		movl $0, %edi
+		movl $10, %esi
+
+	.Lcomp:
+		cmp %esi, %edi
+		jg .Lend
+
+		movl %eax, %ecx
+		addl %ebx, %eax
+		movl %ecx, %ebx
+
+		addl $1, %edi
+
+		jmp .Lcomp
+
+	.Lend:
+
+\end{lstlisting}
+
+
+\section{An overview of the x86 registers}
+The x86 processor has eight general purpose registers, each being able to hold a 32-bit value. General purpose means, that we are able to address these registers in our assembly program. However only six of those registers are actually used for storing intermediate values. The other two have a special purpose and should not be overwritten with other values. The registers are called: \\
+\%eax, \%ebx, \%ecx, \%edx, \%esi, \%edi, \%esp, and \%ebp \\
+The last two registers \%esp and \%ebp have a special purpose. \\
+\%esp is called the \textit{stack pointer}. It points to the lower end of the \textit{stack}. The stack is the region in memory where a program stores temporary values in the case that all six registers are already occupied. \%ebp is called the \textit{base pointer} and also points to some location on the stack. We will cover this a bit later, when we look at the stack. \\
+The other six registers can be used at will, but there are some conventions to be followed when we use them between different functions. \%eax for example is usually used to store the return value of a function. We have not introduced functions yet, so when we do this will make more sense.
+
+\section{The x86 instruction set}
+In this chapter I want to list all important x86 Instructions. \\
+All instructions start with the name of the instruction followed by one or two operands separated by a comma. These operands can be one of three things: \\
+\begin{itemize}
+	\item \textit{Register}
+		A register is denoted with its name, for example \%eax. When we use a register as an operand we actually mean the value that the register holds.
+	\item \textit{Memory location}
+		A register can also hold memory addresses as memory addresses are 32-bit values and registers can hold 32-bit values. \\
+		So assuming that our register \%eax holds a memory address, then (\%eax) denotes the value that is stored at that address.
+	\item \textit{Number value}
+		If we want so simply secify a number, we can write \$$n$ to specify the number $n$. For example we might want to move the number $0$ to the register \%eax, so we write movl \$0, \%eax. \%eax then contains the value $0$.
+\end{itemize}
+
+\paragraph{mov <op1>, <op2>}
+Moves the value of the left operand to the value of the right operand.
+The instruction is used to either move a value from the main memory to a register or move the value stored in a register to a location in main memory. You cannot move a value between two memory locations with just one operation. To do that, you would first need to load the value into a register and then move it back to that other location in memory. The following combinations are possible: \\
+
+\begin{lstlisting}
+mov %rax, %rbx 		# moves from register to register
+mov %rax, (%rbx) 	# moves from register to memory
+mov (%rax), %rbx 	# moves from memory to register
+mov $42, %rbx 		# moves number to register
+mov $42, (%rbx) 	# moves number to memory
+\end{lstlisting}
+
+
+
+\paragraph{add <op1>, <op2>}
+Adds the value of the left operand to the value of the right operand and stores it into the location provided by the right operand. The following combinations are possible: \\
+\begin{lstlisting}
+mov %rax, %rbx 		# adds register to register
+mov %rax, (%rbx) 	# adds register to memory
+mov (%rax), %rbx 	# adds memory to register
+mov $42, %rbx 		# adds number to register
+mov $42, (%rbx) 	# adds number to memory
+\end{lstlisting}
+
+\paragraph{sub <op1>, <op2>}
+Subtracts the value of the left operand from the value of the right one and stores it into the location given by the right operand. This works analogously to to the add instruction.
+
+\paragraph{lea (\%rax), \%rbx}
+The \textit{lea} instruction takes the address stored in \%rax instead of its value. This may seem redundant at first, as we already have this address. However \textit{lea} allows us to do certain address calculations on the fly like adding an offset to the address. For example \\
+lea 4(\%$rax$), \%$rbx$ \\
+treats the value at \%rax as an address, adds 4 to it and stores it back to \%rbx.
+
+\paragraph{push \%rax}
+This \textit{push} instruction is an equivalent to \\
+1) subtracting 4 from the stack pointer and \\
+2) mov \%$rax$ to the memory location the stack pointer points to. \\
+You can... \\
+push \%$rax$ -- ...push the value of a register  \\
+push (\%$rax$) -- ...push the value of a memory location  \\
+push \$42 -- ...push a constant value  \\
+
+\paragraph{pop \%rax, \%rbx}
+\textit{pop} behaves like the inverse to \textit{push}. It \\
+1) moves the value the stack pointer points to to \%$rax$ and then\\
+2) increments the stack pointer by 4
+You can...
+pop \%$rax$ -- ...pop to a register or\\
+pop (\%$rax$) -- ...pop into memory\\
+
+\paragraph{call \%rax}
+Call pushes the value of the instruction pointer onto the stack. Then it sets the instruction pointer to point to address given by the operand. This operand can also be a label.
+
+\section{Memory}
+
+\section{Program Flow}
+
+
+\section{Calling Conventions}
+
+\chapter{Sequential Programming}
+This first chapter will give you an introduction to the most common style of programming that you will probably encounter towards the beginning of every computer science Bachelor. Languages that allow sequential programming are Assembly, C, C++, C\#, Java, Python and many more. The concepts that are explained in this chapter form the basis of the most important things you need to know to start learning programming languages and other more interesting programming concepts. On the other hand if you already know a programming language like C or Java, you may carefully skip some of the sections in this chapter. \\
+Sequential programming is so popular because it stays close to the way computers work. Computer generally have a sequence of instructions that they execute in a specified order and a sequential program defines that sequence. This is usually very intuitive as you can think of the first instruction always being finished before the second one starts executing. I want to give a simple example program to give you the intuition.
+
+
+\lstset{language=C}
+\begin{lstlisting}
+	int x;		// declares a variable x of type int
+	x = 1;		// x gets the value 1
+	x = x + 2;	// x gets the value x+1 (=3)
+	x = x * 3;	// x gets the value x*3 (=9)
+	x = x / 3;	// x gets the value x/3 (=3)
+	x = x - 2;	// x gets the value x-2 (=1)
+	print(x);	// the method print is called with x
+\end{lstlisting}
+The `=' sign denotes an assignment, meaning that the value on the right side will get assigned to the variable on the left. The `;' (semicolon) denotes the end of an instruction. `//' marks the beginning of a comment. The comments in this example show which value the variables have after the corresponding instruction has been executed. \\
+
+The important thing about this example is that the order of the operations is strict and cannot be changed by the computer. Eventually we will see that this is not entirely true when dealing with parallel programs (,which are programs that do several computations concurrently). But as long as were only talking sequentially, we can assume that the order of instructions always holds. \\
+
+\section{Important Programming concepts}
+\section{Variables and Assignments}
+Variables are the most important concept in programming. A variable simply is a placeholder for a value. As we have seen in the chapter about Assembly programming, a modern processor can only store about six values at the same time. These six storage locations are called registers and each one has a specific name. If at some point we need more than six storage locations, we need to manually move values onto main memory. This is so inflexible and error prone that it makes programming a nightmare. \\
+Variables are a very nice abstraction for storage locations. We can simply declare variables as we wish and store values into them. We don't have to care about how and where those values are actually stored cause the underlying system does that for us. We can also chose meaningful names for our variables like, ``result'', ``index'' or ``size'' to make the program more readable. \\
+
+An assignment is a statement in which we store a value into a variable. Assignments in Java might look like this: \\
+\lstset{language=Java}
+\begin{lstlisting}
+	x = 2;		// x gets the value of two
+	x = x + 2;	// x gets the value of x + 2 (=4)
+	x = y + 42;	// x gets the value of y + 42
+\end{lstlisting}
+
+The ``='' is used in many languages for example C, C++, C\#, Java, Python. Some languages for example Pascal or Eiffel use the symbol ``$:=$'' instead.
+The left hand side of an assignment must be a variable. The right hand side is an expression that evaluates to a value. This might for example be a number, another variable or a calculation that contains those. \\
+
+\section{Data Types}
+Throughout our program we might have values of different \textit{types}, for example numbers (called \textit{integers}) or truth values (called \textit{booleans}). When these values get stored in a variable, that variable gets associated with the type. \\
+The type of a variable is the \textit{kind of data} that the variable stores. So you can think of a type as a category or format of information. The most popular examples would be numbers, characters, arrays, etc.. Types are very important for program correctness because when we operate on variables we want to make sure that the kind of operation we apply actually conforms with the type of the variable. For example numbers can be added together, texts cannot. We can calculate the n'th fibonacci number assuming that n is natural number. If n is a rational number, we have a problem. \\
+Therefore in many programming languages variables have a strictly defined type that cannot change during the rest of the program. So you cannot have a variable $x$ that first holds a number and then later holds a string. The type of the variable $x$ needs to be known from the beginning and $x$ is only allowed to hold values of that particular type. Languages that enforce this rule are called \textit{statically typed}. \\
+
+So whenever we declare a variable, we need to state its type. In C or Java for example this looks like this:
+
+\lstset{language=Java}
+\begin{lstlisting}
+	int x;		// x will hold integers
+	boolean y; 	// y will hold truth values
+	float z;	// z will hold floating point numbers
+\end{lstlisting}
+
+Now in a statement like
+ \lstset{language=C}
+\begin{lstlisting}
+	x = y + z
+\end{lstlisting}
+the compiler will alert us that
+\begin{enumerate}
+	\item it is not possible to sum together variables of type boolean and float and that
+	\item you cannot assign a value that is not an integer to a variable that holds integers
+\end{enumerate}
+
+
+We will see a lot more interesting stuff about types in object oriented programming, where our data chunks will be called objects, and these objects will have types. \\
+Also later in the chapter about formal methods we will construct proofs for showing that certain expressions conform to valid types.
+
+
+\section{Control Flow - IfElse, Switch statements}
+Often in our programs we will want to tell our programm what to do next, based on the state of some variables. For example if the user has pressed a button, we want it to do something and othwerise we want it to do nothig.
+
+\subsection{IfElse}
+If the variable $a$ is bigger thant $5$, then we want our program to do this, and otherwise we want it to do something else. Every programming language has constructs for modelling this kind of control flow. In sequential languages we often use the IfElse construct. It looks like this:
+\begin{lstlisting}
+	if (a > 5) {
+		// code to be executed if a > 5
+	}
+	else {
+		// code to be executed otherwise
+	}
+\end{lstlisting}
+
+The brackets following the \textbf{if} keyword contain the condition of the IfElse statement. The condition may be an arbitrary large boolean expression, so it is always evaluated to either true or false. The following code surrounded by curly brackets is called the \textbf{then} block. After the \textbf{else} keyword follows another block, called the \textbf{otherwise} block. Those blocks can contain an arbitrary number of statements and even other ifElse constructs. \\
+Depending on the language you use, variations of the ifElse statement are allowed such as leaving away the else part or the following consturuct:
+\begin{lstlisting}
+	if (a == 1) {
+		// code to be executed if a == 1
+	}
+	else if (a == 2) {
+		// code to be executed if a == 2
+	}
+	else if (a == 3) {
+		// code to be executed if a == 3
+	}
+	else{
+		// code to be executed otherwise
+	}
+\end{lstlisting}
+
+
+
+\subsection{Loops}
+Often you will want to execute the same line of code multiple times or you will want to execute it as long as some condition is fulfilled. This is accomplished by the \textbf{while} statement. In the following example we want to sum up all number between $1$ and $100$:
+\begin{lstlisting}
+	int result = 0;
+	int i = 1;
+	int n = 100;
+	while (i <= n) {
+		result = result + i;
+		i = i + 1;
+	}
+
+\end{lstlisting}
+We call $i$ the iterator. It gets initialized with the value $1$ and the loop stops when $i$ reaches a value that is greater than $n$. It is important that we increment the value of $i$ at every loop iteration. If we do not, the loop will never terminate and our program will be stuck forever. \\
+There is another variant of this construct found in many languages called the \textbf{for loop}. It is essentially just so called \textbf{syntactic sugar}. Syntactic sugar is a term that we use for syntax in a programming language that doesn't add anything new to the language but allows us to write something in a `nicer' way. The previous example can be rewritten as:
+\begin{lstlisting}
+	int result = 0;
+	int n = 100;
+	for (int i = 1; i<= n; i = i + 1) {
+		result = result + i;
+	}
+\end{lstlisting}
+You can see the same statements from the while construct appear simply at a different place.
+Despite the fact that this is semantically the same code as before, it has several advantages:
+\begin{itemize}
+\item The scope of the variable $i$ now lies only within the loop body. This means that the variable is not visible from outside the loop and the programmer will not accidentally mix it up the later in the program with another variable called $i$.
+\item The statement which increments the loop variable has a specific place in our code and will therefore not be forgotten as easily. Seriously, forgetting to increment the iterator variable seems like a small mistake, but it happens quite often and can lead to a lot of frustration if the error is not detected.
+\end{itemize}
+
+Some older languages feature a \textbf{goto} keyword with which you could jump from one position of your code to any other. The use of this instruction is highly discouraged because it can lead to very complicated code.
+
+\subsection{Switch statement}
+The switch statement can be seen as a replacement for the nested ifElse statements we have seen earlier. Imagine you have just one variable $a$ and depending on its value you want to do different things in your code. Before we had several ifElse statements covering the different values of $a$. This is a lot of unnecessary code to write for such a simple thing we want to achieve. The switch statement is more intuitive:
+ \lstset{language=Java}
+\begin{lstlisting}
+	switch (a) {
+	case 1:
+		// code to be executed if a == 1
+		break;
+	case 2:
+		// code to be executed if a == 2
+		break;
+	case 3:
+		// code to be executed if a == 3
+		break;
+	default:
+		// code to be executed otherwise
+	}
+\end{lstlisting}
+Here the variable in brackets after the \textbf{switch} keyword is the variable for which we want to do the case distinction. Depending on its value the program execution jumps to the corresponding line. The important thing to note is that the program will execute all the following cases too if it is not stopped by a \textbf{break} statement. The break statement simply tells the program to jump to the end of the switch statement. If none of the cases match the value of the variable the code behind the \textbf{default} keyword will be executed.
+
+\section{Methods}
+Methods are a way to modularize our program. We can write code that does a specific thing as a method and then call it from within another method! Here is an example:
+
+\begin{lstlisting}
+	void main(){
+		int userInput = getUserInput();
+		if(inputValid(userInput)){
+			processInput(userInput);
+		}
+	}
+
+	boolean inputValid(int input){
+		if(input < 100){
+			return false;
+		}
+		else if (input < 200){
+			return true;
+		}
+		else{
+			return false;
+		}
+	}
+
+	void processInput(int input){
+		// some code
+	}
+\end{lstlisting}
+This program just asks the user for some input, checks whether it is in the range between 100 and 200 and then processes it. `getUserInput', `inputValid' and `processInput' are all methods that we use to better separate our code. Imagine if everything would be in a single block of code. Our program would get unreadable very fast. \\
+As you see methods have \textbf{arguments} and \textbf{return types}. Arguments are values that we pass on when we call this method. A return value is what a methods returns.
+If a method has nothing to return its return type is marked as \textbf{void}.
+
+
+
+\section{Data structures}
+As far we have heard only of integer and boolean types. It would be cool if we could use these basic types to define other types to use for various applications. Also so far we have only dealt with a limited number of values at the same time so we had no problems storing them in local variables. What if we wanted to store several hundreds or thousands of values in our memory and still be able to access the elements that we need? We need to think about suitable data structures.
+
+\subsection{Arrays}
+Arrays are the most commonly used data structure to achieve this. There are other data structures more suitable for some tasks but from the way that our computer's memory works, arrays are the most intuitive way to store a larger amount of data. Imagine our computer's memory as number of continuous storage locations while each location is accessible through a corresponding address. An array is simply a reserved sequence in this memory where we can continuously store our values. When we declare an array, we have to tell the computer how large this sequence should be, eg how many values we will want to store. In programming terms we simply think of an array as a number of elements, each stored at a certain position called the \textbf{index}. \\
+In Java an array might be used like this:
+\begin{lstlisting}
+	int[] sum = new int[101];
+	sum[0] = 0;
+	for (int i=1; i<=100 ; i=i+1) {
+		sum[i] = sum[i-1] + i;
+	}
+\end{lstlisting}
+At the end of the loop the sum array should contain at every index $i$ the sum of the numbers $1$ to $i$. I initialized $101$ values because the first index of an array in Java is $0$. So here our array contains 101 elements, while sum[0] is our first value and sum[100] our last one. \\
+It's important to note that arrays cannot dynamically change their size. This means that we have to specify the size of our array when we create it and cannot change it afterwards. In case we do not know, how many elements we want to store in our array, we should maybe use a different data structure.
+
+\section{Some important terminology}
+\subsection{Compile Time vs Runtime}
+When we look at a program before it is being run, we call this the compile time. Even if some programs like for example Java programs are not really compiled, we still talk about compile time when we examine the program prior to running it. When we run a program we speak of runtime. \\
+This distinction is important because we have different knowledge about a program when it is being run than before. For example we might only know the value of certain variables that are implicitly defined in our program. We do not know values that come from the outside like user inputs or data that the program will process. \\
+The compiler of any language will try to detect errors in your code and report them to you before you run the program. The errors that it finds during compilation are called compile time errors. If your program crashes during execution the error will most probably be a runtime error, an error that could not have been detected before running your program. \\
+An example would be the access of non-existing elements in an array, also called and \textbf{out-of-bounds} exceptions. Assuming we have an array of ten elements:
+\begin{lstlisting}
+	int[] A = new int[10];
+\end{lstlisting}
+The following out-of-bounds error will be detected by your compiler during compile time:
+\begin{lstlisting}
+	A[13] = 42;
+\end{lstlisting}
+The following code might lead to a runtime error:
+\begin{lstlisting}
+	int a = getUserInput();
+	A[a] = 42;
+\end{lstlisting}
+
+
+\chapter{Object Oriented Programming}
+Object oriented programming a very popular programming concept that is being used a lot in practice, especially when designing larger software systems.
+The main idea behind object oriented programming is to define everything in terms of objects and how they interact with each other. You can think of an object as a well defined chunk of data that also has some functionality defined. \\
+We've already seen that we can define our own data chunks in programming languages that are not object oriented. The difference here is that objects do have functionality attached to them, and structs don't. \\
+\section{Objects and Classes}
+I'd like to give a short example right here at the beginning. The following is a definition of an object in the programming language Java. These definitions are called classes. Once we have defined such a class we can build infinitely many objects out of it. So you can think of a class as the definition of a certain type of objects. All objects of the class Door \textit{look} and \textit{behave} the same way, namely exactly the way they have been defined in the class description.
+\lstset{language=Java}
+\begin{lstlisting}
+class Door{
+	// data that the object will contain
+	private boolean is_open;
+	private Color color;
+
+	// functionality of that object
+	public Door(){
+		is_open = false;
+		color = Color.WHITE;
+	}
+
+	public void open(){
+		is_open = True;
+	}
+
+	public void close(){
+		is_open = False;
+	}
+
+	public void set_color(Color new_color){
+		color = new_color;
+	}
+
+	public void get_color(){
+		return color;
+	}
+}
+\end{lstlisting}
+
+If at this point you have some trouble reading the above code, I would advise you to first read the chapter about sequential programming or even some parts of the Java introduction chapter. I will however shortly explain the pieces that are relevant for object oriented programming. \\
+You notice that the function \textit{Door} starts with a capital letter and has the same name as the class its defined in. In Java this means that $Door$ is a constructor of this class. A constructor is a special function that defines how an object is initialized or in other words, what happens at the moment when an object of that class is initialized. It is called when an object is being created. In our case $is\_open$ is set to False at the object initialization process. Semantically this means that we can only create Doors that are initially closed. \\
+We can now create objects of type Door in our program. I'll also call them \textit{doors} from now as they are meant to be seen as abstractions of actual doors. When we have created a door, we know that:
+\begin{itemize}
+\item the door is either closed or open but initially it is closed
+\item the door has a certain color which initially is white.
+\item the door can be opened with the open() function.
+\item the door can be closed with the close() function.
+\item the door's color can be set with the set\_color(Color c) function.
+\item and we can get the door's current color with get\_color().
+\end{itemize}
+
+
+
+Just like \textit{int} and \textit{boolean}, Door is also a Type. Java makes a destinction between \textit{primitive types} like boolean or int and \textit{object types} like Door and Color that are defined in classes. However we will not make this distinction in this chapter as it is rather Java specific. In a pure object oriented language everything is an object, even so called primitive types. Java in that sense is not purely Object Oriented, but will ignore these details and address them in the chapter about Java programming. \\
+
+\section{Polymorphism and Inheritance}
+
+
+
+\chapter{Parallel Programming}
+
+\section{Basic Terminology and Concepts}
+\subsection{Concurrency and Parallelism}
+There are two important terms in parallel programming that are often mixed up. The terms \textit{parallel programming} and \textit{concurrent programming} seem to mean the same but are used differently. \\
+Concurrent programming is when a program is designed in a way that two or more computations can be run at the same time and thus their sequences of operations overlap each other. Overlapping means that if we have one computation with the instructions $a_1, a_2, a_3$ and the another one with the instructions $b_1, b_2, b_3$, in this order, the resulting sequence of instructions could be $a_1, b_1, a_2, b_2, a_3, b_3$ or $a_1, a_2, b_1, a_3, b_2, b_3$ or any other overlapping of this kind. In fact, the major problem with concurrent programs is that we can't know for sure how the sequences will overlap. \\
+We call these independently running computations \textit{threads}. If a concurrent program is run on a machine with multiple execution units - for example a processor with several cores or a graphics card - threads can be distributed among the cores and therefore be run at the same time, which we then call \textit{parallel}.
+So a parallel program is a concurrent program which is run on multi-core machine. Or in other words, a concurrent program is designed with parallelism in mind, while a parallel program is a concurrent program that is actually being executed on a multi-core machine. \\
+An important benefit of concurrent programs is obviously that it can be run much faster, because the work is distributed. But what is the advantage of a concurrent program when it is run on machine that has only a single core? \\
+When we run a concurrent program on a single core then only one thread at the time can execute its code. The threads then change turns in when they are allowed to execute their code. This happens at the order of milliseconds such that it almost appears as if the threads were running in parallel. It is similar to the way an operating system allows you to run several programs at the same time. The mechanism that decides which thread when gets its turn is called \textit{scheduler}. \\
+This is were the advantage of concurrency lies: Several computations can be run concurrently without blocking each other. For example imagine a 3D animation software with the ability to edit and then render 3D animations to videos. Rendering is a very heavy computation which probably takes more than a few milliseconds. If the software was not designed concurrently then the whole program would freeze during the rendering period because the software would be busy rendering and could not process user input. A concurrent implementation would have two independently running threads, one for the rendering process and one for checking user input. Thus the program could still accept user input and would not freeze.
+
+\section{Performance}
+When we want to make a computation run faster on a certain machine we can think of several ways to do so. One would be to design a better algorithm, one that has a better complexity. However with certain problems, we believe that it is not possible to find better algorithms. For example it is obvious that you cannot sort a list of $n$ elements without at least looking at all $n$ elements. A sorting algorithm needs at least $n$ steps to sort the list of $n$ elements. \\
+From an engineering point of view we could try to optimize the hardware of that machine to make it do more instructions in less time. Nowadays processor manufacturers are getting to their limits when trying to build faster processors. There are several reasons for this, one of them being the overheating problem. So instead manufacturers decided to build more cores into a processor. It's what we call a \textit{multi-core processor}, a processor that consists of several cores that can execute code independently of each other. From now on we will call these cores \textit{execution units}. \\
+Lets assume that an algorithm and a machine (with p execution units) are already given. \\
+To make the algorithm run as fast as possible we need to equally distribute the computational workload on as many execution units as possible. In the following we want to define a way to measure the performance of our program when it is run on a certain amount of cores: \\
+Let $T_1$ be the time that the program needs to finish on a machine with only one processor and let $T_p$ be the time that it takes the program to finish when it runs on a machine with $p$ cores. What we would like to have is: $T_p = \frac{T_1}{p}$ which would mean that that the execution time was split up equally among all $p$ cores. $T_p>\frac{T_1}{p}$ would mean that the program doesn't parallelize perfectly or that we have some \textit{overhead} due to parallelization. Overhead is a term for all additional computation that is needed to parallelize the program, for example scheduling the threads. $Tp<\frac{T1}{p}$ would indicate that we gained more performance than theoretically possible (we will later see that this can actually happen due to caching effects).\\
+We want to define the term \textit{speedup} for saying ''how much faster'' our program is when run in parallel, that is on $p$ processors instead of just one. Speedup is defined as $S_p = \frac{T_1}{T_p}$. \\
+The speedup for a parallel program should desirably be linear to the number of cores ($S_p = p$), such that we would always be able to add more and more cores to our machine and see our program run faster and faster. Sadly in reality this difficult to obtain and we will see why. \\
+\textit{Amdahl's Law} is a way to theoretically calculate the speedup of a program given its percentages of sequential code (written as $s$) and parallelizable code ($1-s$). To make this clear, we assume that a certain part of our code can be parallelized and the other part cannot. Only the percentage that can be parallelized can profit from the multi-core machine. The law says: \\
+$T_p = T_1(s+\frac{1-s}{p})$ which leads to the theoretical speedup of $S_p = \frac{T_1}{T_p} = \frac{p}{1+s(p-1)}$\\
+Amdahl's Law is purely theoretical and will only calculate the maximum possible speedup, ignoring implementation and hardware limitations.\\
+A different approach to reason about speedup is \textit{Gustafson's Law}. It takes the runtime as a fixed value and examines how the speedup behaves when the size of the problem rises. More processors are able to solve larger problems in the same time. It says:\\
+$S_p = p-s(p-1) $ \\
+To highlight the difference between Amdahl's and Gustafson's law we could say: Given more processors, with Amdahl's law we can solve the task faster while with Gustafson's law we can solve more of the task in the same time. \\
+Here are two examples to practice this difference: \\
+1) A computer scientist designed an algorithm to calculate prime numbers. $80\%$ of his program runs in parallel. His goal is to make it calculate the one billionth prime number as fast as possible. How many threads should he create? \\
+2) A company needs to sort very large amounts of data. The sorting algorithm they use can only be parallelized up to 20\%. The company currently uses a machine with 4 cores and wants to reason about whether to buy a new machine with 16 equally fast cores. \\
+Reason about the two problems. Would you use Amdahl's or Gustafson's law?
+
+\section{Parallel Programming Concepts}
+There are many different methods on how to construct parallel programs. Some of them are still rather theoretical while others are practical and well adapted in modern programming environments. Not every method is well suited for every problem. We will see various concepts and discuss their advantages and disadvantages. But before we do that we need to take a look at some terminology and difficulties that come with parallelism. \\
+
+\subsection{The state of a program}
+The state of a program is given by the objects and variables of the program. When we talk about an object oriented language, it makes sense to say that objects are components of a program and the state of every object is given by its fields (variables and references).  \\
+In parallel programming we reason about threads which execute their code independently of each other. A state is called \textit{shared} if more than one thread has access to it. \\
+This is a very important property because whenever a state is shared among threads, things can go wrong and we have to make sure they don't. The thing is: By default there is no coordination between threads. Let's say we have a variable that is shared among two threads: If one thread changes the value of that variable the other thread might not know immediately that the value has been changed. \\
+Here is some Java code to show how such a scenario might look in practice:
+\lstset{language=Java}
+\begin{lstlisting}
+	public boolean free; // a shared variable
+
+	public m() // is called by multiple threads
+		if(free){
+			free = false;
+			f(); // may only be called by one thread at a time
+			free = true;
+		}
+	}
+\end{lstlisting}
+Here $m()$ could be executed by several threads in parallel. The idea of the shared variable variable $free$ and the if-statement is to allow only one thread at the time to execute the method $f()$. If a thread reads the value $true$, it sets $free$ to $false$ such that the next thread knows not to enter the then block of the if-statement. This does not work as expected!!! It is very important to understand why: \\
+Imagine an airport with just one landing stripe. Airplanes that land on this airport must make sure, that the landing stripe is free and no other airplane is using it. The landing stripe is our shared state. Now imagine that airplane A and airplane B both look at the landing stripe at the same time, see that it's empty and initialize their landing sequence. Even if plane A lands before B, and B now sees that the landing stripe is occupied, it will be too late to turn around. These timing problems also happen between threads. Let's say we model the landing stripe as our boolean variable $free$ and $f()$ represents landing. When two threads look up the value of $free$ at the same time, they will both read the $true$ and therefore both execute the landing sequence. Setting $free$ to $false$ changes nothing because both threads are already in the then-block. This is what we in general call a \textit{race condition} because the output of the program depends on which thread will ''execute faster''. This exact timing between threads is something we can impossibly reason about and we therefore	have to find other ways to somehow coordinate threads. \\
+
+If an object can change its state during runtime it is called \textit{mutable} and otherwise \textit{immutable}. Constants in Java for example are immutable while variables are not (hence their name). An immutable object is by itself safe to use with several threads because threads can only read from it but not modify it. \\
+
+Let's have another example of a race condition problem: Consider a program for a device which detects and counts light rays. The device has several detectors which light up every time they are being hit. Every detector runs on an individual thread which increments a counter every time it detects a light ray. The counting of the light rays could be designed in two ways: \\
+
+(1) The counter is a shared variable which is visible to all detector threads. It is being incremented every time a detector lights up. If two detectors light up at the same time, the variable is being accessed in parallel. The counter - a mutable object- can be accessed an modified by several threads at the same time. \\
+
+(2) Every detector thread has its own counter variable. At some coordinated time when the detectors are off-line one of the threads collects the counter variables of all detectors. This design leads to what is called \textit{isolated mutability} because all mutable states (our counter variables) are only being modified by their corresponding \textit{execution context} (thread). \\
+
+What do you think are the advantages and disadvantages of the two designs? What's risky about design 1) and how could we remove this risk? \\
+
+\subsection{Data-, and Race conditions}
+Let's discuss the detector example from the previous section and assume the first design choice, namely that the counter is a global shared state where all threads can write to. In its simplest form the counter could be an integer field which contains the amount of times the device has been hit. The detector threads will increment the counter whenever they detect a light ray. Let's look at this operation in detail. To increment a value means to add $1$ to its current value. On most machines the increment operation is done the following way: \\
+\begin{enumerate}
+\item Read the integer value from memory
+\item calculate 1 plus this value
+\item store the result back into memory
+\end{enumerate}
+You see that this simple operation of incrementing a value, which in Java can be written as the one line
+\lstset{language=Java}
+\begin{lstlisting}
+	counter ++;
+\end{lstlisting}
+actually consists of three operations if we look at it at the machine level. \\
+Say now, two detectors detect a light ray at exactly the same time. The following overlapping would be a possible scenario:
+\begin{description}
+\item at the moment c contains the value 10
+\item T1: reads the value 10
+\item T2: reads the value 10
+\item T1 and T2: both calculate the value 11
+\item T1: writes back 11
+\item T2: writes back 11
+\end{description}
+The correct counter value should be 12 but with the above overlapping of T1 and T2, the counter is set only to 11. Although the above scenario seems highly unlikely, its possibility is still quite high considering how many increment operations and how many concurrently operating threads we might have. Such a program must be considered unsafe! \\
+Because the outcome of the program now depends on the relative timing of the threads (which can impossibly be predicted), the problem that occurs is called a \textit{race condition} (the various threads are ''racing'' to execute their code first). A race condition which happens because of a shared mutable state is called a \textit{data race}. Many (but not all!) cases of race conditions are data races. \\
+There are several mechanisms that allow us to prevent data races by allowing only one thread at a time to have access to the state of a shared object. This is called \textit{synchronization} or \textit{''protecting the state''}. However these synchronization mechanisms can make a program run slower. A badly written parallel program could perform even worse than its sequential version. This additional computation needed for synchronization is called \textit{overhead}.
+Therefore one main concern in parallel programming is to find ways to prohibit race conditions while not decreasing the performance of the main program. \\
+%We will see about these mechanisms in a later section.\\
+
+\begin{comment}
+
+\subsection{Task Parallelism}
+Task parallelism is a programming model in which the programmer defines tasks (some code) and when their are executed. Tasks can `spawn'other tasks or wait until they have finished. The waiting operation is often call `join'.\\
+The definition of when tasks are spawned is called the task graph. It consists of the tasks reperesented by vertices that are connected by arrows implying that a task is bein spawned by another task or if several arrows point towards the same task, that this task is waiting for the other tasks to finish.  \\
+Good examples for task parallelism are recursive algorithms. Consider as an example the following divide and conquer approach of solving the fibonacci sequence:
+\begin{algorithmic}
+\STATE{function fibo (n: Integer): Integer}
+\IF{$i=0$}
+\STATE{return $0$}
+\ELSIF{$i=1$}
+\STATE{return $1$}
+\ELSE
+	\STATE{spawn new Task with $fibo(n-1)$}
+	\STATE{spwawn new Task with $fibo(n-2)$}
+	\STATE{join both tasks save their results}
+	\STATE{return the addion of the two results}
+\ENDIF
+
+\end{algorithmic}
+
+Tasks and Threads are not the same thing. If we were to create a treads in the above example while trying to calculate the 100th fibonacci number the program would create at least 2 to the power of 98 threads. Thread objects have some overhead, meaning too many threads will decrease the overall performance of the program. On they other hand it is very unlikely that our system has that many processors. Most modern multicore processors have between 2 and 8 cores. \\
+Tasks are amounts of work that can be scheduled onto threads and then be execeuted. \\
+
+\subsection{Data Parallelism}
+Data Parallelism the idea that the a function can be applied onto independent sets of data simultanously without causing any race conditions if it reads and writes only on its own data set. If for example we wanted to do a linear search over an array of length n, we could define p threads to do this concurrently by telling each thread i to only search the arrea between index in/p and (i+1)n/p-1. \\
+The good thing about data parallelism is that the programmer only has to define the function, while the system can take care of how the work is partitioned over the execution units. The system can decide on how many thread it wants to generate for this work. \\
+Because data parallelism can be automated it is important to categorize the sorts of functions that can be applied and define their properties. The following are the most used sorts of functions for data parallelism. \\
+\paragraph{map: }
+\begin{itemize}
+	\item input: a set of data ($x_1, x_2, x_3, ... x_n)$, could be an array or a list
+		and a pure function $f(x)$. Pure means that for the same arguments the function always yields the same result and does not cause any side effects.
+	\item output: a set of data ($f(x_1), f(x_2), ... f(x_n)$, where the function of course has been evaluated .
+\end{itemize}
+Consider the following loop:
+\begin{algorithmic}
+\FOR{$i=0$ to $100$}
+\STATE{$A[i] := A[i]+B[i]$}
+\ENDFOR
+\end{algorithmic}
+
+The outcome of every iteration is independent of the others and therefore it is safe to split the iterations among an arbitrary amount of threads to be executed in parallel. Some modern programming languages contain the keyword ``parfor'' which allows the system to automaticly execute the loop in parallel.
+If instead the loop body where
+\begin{algorithmic}
+\STATE{$A[i] := A[i-1]+ B[i]$}
+\end{algorithmic}
+the parallel for loop would not be allowed. It would lead to data races.
+
+
+\paragraph{reduce: }
+\begin{itemize}
+	\item input: a set of data $(x_1, x_2, x_3, ... x_n)$, could be an array or a list and
+		an associative operation $\circledast$.
+	\item output: the value $(x_1\circledast x_2\circledast... \circledast x_n)$.
+
+Because $\circledast$ is associative, it does not matter which subsets are being reduced first, i.e. ($a\circledast b) \circledast c = a\circledast (b \circledast c)$. The reduction algorithm could first evaluate the pairs $x_1\circledast x_2 $, $ x_3\circledast x_4 $, ... $x_{n-1}\circledast x_n$ and then go on in the form of a tree like structure.
+If $\circledast$ were commutative, i.e. $a\circledast b = b\circledast a$, the order of the elements could be exchanged as well.
+\end{itemize}
+\paragraph{prefix scan: }
+\begin{itemize}
+	\item input: a set of data $(x_1, x_2, x_3, ... x_n)$. could be an array or a list.
+		a associative operation $\circledast$.
+	\item output: an oredered set of data $(x_1, x_1\circledast x_2,..., x_1\circledast x_2\circledast... \circledast x_n)$.
+\end{itemize}
+
+
+\subsection{Protecting the state}
+Let's say we hava a parallel program with a shared mutable state and we need to make sure that can only be modified, by one thread at the time.
+
+\subsection{Rendez-Vous between Threads}
+
+\subsection{Atomic Methods}
+In the following we will cover some fundamental methods that if implemented atomically, can help to design parallel programs.
+\paragraph{Test-And-Set (TAS)}
+A simple way to design a locking mechanism is to have a variable, that is 1 whenever it is locked by a thread and 0 otherwise. However if a thread wanted to aquire the lock, it would have to do two steps: \\
+Check whether the value is one. \\
+Aquire the lock if the value is one. \\
+These two steps have to be executed atomically. The TAS operation is the simplest solution for this problem. TAS does the following atomically: \\
+\begin{algorithmic}
+\STATE{function TAS(a: address): Integer}
+\STATE{result = value at address}
+\STATE{value at address = $1$}
+\STATE{return result}
+
+\end{algorithmic}
+
+TAS sets the value at the given address to one but returns the original value. If it is zero, then TAS successfully changed the value from zero to one, if it is one. \\
+This is how TAS can be used to implement the aquire method of a lock: \\
+\begin{algorithmic}
+\STATE{function aquire(a: address): Integer}
+\WHILE{result = 1}
+\STATE{result = TAS(address)}
+\ENDWHILE
+\end{algorithmic}
+
+This is definitely not the best way to implement a lock (we will lock at spinlocks later), but it illustrates the use of TAS. \\
+The method calls TAS(address) until it finally returns zero, meaning the lock was free and then newly aquired by the TAS method. \\
+
+\subsection{CSP}
+CSP stands for Communicating Sequential Process. It is parallel programming modell, which excludes shared states. A program consists of several independent processes, which communicate via messages. Every Thread has its private state. If we were to implement the Sensor program from before, where n different sensors are counting the times they have been hit, we would create n sensor threads which each have their private counting state. After some time, they would all send a message to a collector thread, telling it their current count. \\
+Let's see how we could implement the messaging system.
+When a thread T1 sends a message to T2, it is not guaranteed that T2 will instantly read it's message. Maybe T2 is currently executing another block of code. There are two ways to solve this problem: \\
+\paragraph{Synchronous Messaging}
+T1 waits until T2 is ready and can receive the message. After T2 received the message, T1 can continue doing whatever it was doing before. The downside of this approach is obviously the long waiting time of T1. If for some reason T2's calculations take forever, T1 will never be able to continue its previous work. The positive aspect is that T1 knows when T2 has received the message.
+\paragraph{Asynchronous Messaging}
+T2 holds a Message Queue in which T1 places its message. After placing its message T1 is free to go on with its previous work, while we know that T2 will eventually get the message once it has finished all his other calculations and read the other messages being placed before. In theory the message queue T2 holds cannot be infinitely large, so at once it is full, threads delivering new messages will have to wait for the queue to free up. In practice of course messages are not that much space consuming in comparison to the amount of Memory modern computer systems have. \\
+
+There are two main CSP models used in two different programming languages:
+\paragraph{Actor based model (Erlang) }
+Threads with private mutable states are called Actors. Actors can send messages between each other.
+\paragraph{Channel based model (Go)}
+Threads can only send messages over so called Channel objects.
+
+Actors usually wait and react to messages which is why CSP models are called event-driven models. User interfaces are a typical example for event-driven programs. Threads wait until the user applies some input and then react on it.
+
+Types of message passing:
+\paragraph{Message}
+A threads sends a single message to another Thread.
+\paragraph{Broadcast}
+A thread sends a message to all Actors or a subset of all Actors. The message is sent to each Actor separately, therefore it would be of interest to somehow paralellize the broadcast. One could organize the Actors in a tree like structure and let every Actor after it received it, forward the broadcast message to its children.
+\paragraph{Reduction}
+A thread receives messages from multiple actors and usually performs some kind of operation on them. The reduction method could also be parallelized using all actors in a tree like structure. Every Actor would sum up (using the given operation) the messages coming from their children and then pass it on to their parent Actor.
+\subsection{MPI}
+
+
+\section{Designing Parallel Algorithms}
+
+\subsection{Parallel Datastructures}
+\subsection{The ABA problem in datastructures}
+We have already covered this fundamental problem in other sections, but we will now see the indications it can have on concurrent datastructures.
+The ABA problem occurs when using the compare-and-swap method (CAS) to synchronize access on a certain location in memory. CAS has three arguments: an address, a compare value and a swap value. It compares the value at the location with the compare value, and if equal, replaces it with the swap value. CAS then return the value that was originally located at the address. \\
+Let's assume the value at address $a$ is being synchronized using CAS. Now consider the following order of operations of two processes A and B: \\
+A: reads $x$ at location $a$. \\
+B: writes $y$ to location $a$. \\
+B: writes $x$ to location $a$. \\
+A: reads $x$ at location $a$. \\
+A really has no way of knowing whether anything has happened to the value at that location. \\
+Using CAS can lead to the following:
+A: reads $x$ at location $a$. \\
+B: writes $y$ to location $a$. \\
+B: writes $x$ to location $a$. \\
+A: calls CAS with the compare value $x$ and the swap value $z$. \\
+A: CAS reads $x$ and replaces it with $z$. \\
+In certain applications this may not be a problem. Hovever imagine the value being the top element of a stack datastructure. The following could happen: \\
+A: wants to push $z$ onto the stack. It does CAS with $x$ as the compare value.
+B: pushes $y$ onto the stack.
+B: pushes $x$ onto the stack.
+A: CAS succeeds and $z$ gets pushed onto the stack. However
+
+
+
+
+\section{How to program in parallel using a real programming language}
+This chapter contains instructions and many examples about how to program in parallel using different programming languages. This is not an introduction to any these languages, so you should already be familiar with the language you're reading about. It is meant for this chapter to be read concurrently with the other chapters. \\
+
+\subsection{Java}
+\lstset{language=Java}
+\subsubsection{Threads}
+In Java execution units are called Threads. A Thread can be in one of the following states, available through .getState(): \\
+new: \\
+The Thread has been created but the start() method has not yet been called on it. \\
+runnable: \\
+The thread is scheduled to be run but is not yet actually running, because there are no available processor.\\
+running: \\
+The running code of the Thread is being executed on a processor. If Thread.yield() is executed on this thread, it goes back into runnable mode and waits until a processor has become available\\
+not Runnable: \\
+If the Thread has been ordered to wait for a certain amount of time, its mode is called not Runnable. Even if there are processors available the Thread is not going to be use them. When the waiting time is over, the Thread will go back into runnable mode.
+terminated:
+When a Thread has finished executing all its code, it goes into the ``terminated'' mode. Once terminated threads cannot be restarted using .start() but can be rerun using the .run() method. \\
+There are several ways to create a Thread object: \\
+(1) Long version. Takes longer but is better for larger projects because its more clearly arranged:\\
+	Define a new Class which inherits from Thread.\\
+	Define a method called run() which contains the code that the thread needs to execute. The defined class can also contain other methods or fields. \\
+	Later from any other class create an object of the self-defined thread class.\\
+Example: \\
+\begin{lstlisting}
+	class Cat extends Thread{
+
+		public void run(){
+			while(true)\\
+				System.out.println("Miau, I'm a cat.");
+		}
+	//in another class:
+		Thread t1 = new Cat();
+\end{lstlisting}
+
+(2) Short version: Short and practical, but nor reusable:
+	Just define and create a thread using the following definition:
+\begin{lstlisting}
+	Thread t2 = new Thread({
+			public void run(){
+				while (true)
+					System.out.println("Wuff, I'm a dog");
+			}});
+\end{lstlisting}
+
+After we have defined our Thread, we can do the following things with them: \\
+	t1.start();\\
+	This starts the thread. The run method of the thread is being executed. \\
+
+	t1.join(); \\
+	The current thread (the one that calls this method) waits until t1 has finished executing its run method. \\
+	Consider the following example with n reader and n calculator threads. Reader threads read some inputs and save them into some shared memory. Calculators calculate some result out of these inputs but they can only do so after all reader threads have finished reading. \\
+\begin{lstlisting}
+	LinkedList<Tread> readers = new LinkedList<Thread>();
+	LinkedList<Tread> calculators = new LinkedList<Thread>();
+	for(int i=0; i<n; i++){
+		readers.add(new Reader(int i));
+		calculators.add(new Calculator(int i));
+	}
+	for(Reader r : readers)
+		r.start();
+	for(Reader r : readers)
+		r.join();
+	System.out.println("All inputs have been been read. The calculations can now start.");
+	for(Calculator c : calculators)
+		c.start();
+	for(Calculator c : calculators)
+		c.join();
+	System.out.println("All calculations have been completed.");
+\end{lstlisting}
+
+\subsubsection{Synchronization}
+	We will briefly cover most of Java's synchronization mechanisms.
+\subsubsection{The keyword Synchronized}
+	Java has a built in locking system which is relatively simple to use:
+	\begin{itemize}
+		\item If a method is defined as synchronized, then at all times only one thread at the time will be allowed to execute this method. The locking mechanism is reentrant, meaning that the same thread may call the same method from within the method (recursion). The object the method is being called on is being used as the lock.
+\begin{lstlisting}
+public synchronized void increment(){
+	c++;
+}
+\end{lstlisting}
+		\item Code can be placed inside a synchronized block. In this case the locking object must be defined. The following example is semantically the same as one before.
+\begin{lstlisting}
+public void increment(){
+	synchronized(this){
+		c++;
+	}
+}
+
+\end{lstlisting}
+	\end{itemize}
+
+\subsubsection{Locks}
+java.util.Concurrent.locks contains the interface Lock which can be used for implementing locks. Java also provides the implementations ReentrantLock, ReadLock and WriteLock. The following is an example on how to use a reentrant lock to synchronize the increment method from the examples before:
+\begin{lstlisting}
+import java.util.concurrent.ReentrantLock;
+class example{
+	Reentrant lock = new ReentrantLock();
+	public void increment(){
+		lock.lock();
+			c++;
+		lock.unlock();
+		}
+	}
+}
+\end{lstlisting}
+
+Here is an example on how to create your own lock:
+\begin{lstlisting}
+import java.util.concurent.*;
+class Simple_Lock{
+	private boolean isLocked = false;
+
+	public synchronized void lockk() throws InterruptedException{
+		while(isLocked){
+			wait();
+		}
+		isLocked = true;
+	}
+	public synchronized void unlock(){
+		isLocked = false;
+			notify();
+	}
+}
+\end{lstlisting}
+
+\subsubsection{Atomic Types}
+In java.util.concurrent.atomic. there are several classes that implement atomic types. Some of them are: \\
+\begin{enumerate}
+\item AtomicBoolean
+\item AtomicInteger
+\item AtomicIntegerArray
+\item AtomicLong
+\item AtomicLongArray
+\item AtomicReference
+\item AtomicReferenceArray
+\end{enumerate}
+
+\subsubsection{Semaphores}
+Java has its own semaphore implementation in java.util.concurrent. A semaphore is constructed with an initial value. The methods aquire and release are used to decrease and increase this value.
+
+An example of a simple program where at most 4 threads are allowed to call the function $eat_cake()$ at the same time:
+\begin{lstlisting}
+private final Semaphore free_chairs = new Semaphore(4);
+
+public void attend_party(){
+	do_something();
+	free_chairs.aquire();
+	eat_cake();
+	free_chairs.release();
+	do_something_else();
+}
+
+\end{lstlisting}
+Semaphores can also be used to model a rendez-vous, a scenario where two threads ``meet'' at the same point in time. Here is an example of a channel object used for communication between two threads.
+
+\begin{lstlisting}
+private final Semaphore reader = new Semaphore(0);
+private final Semaphore writer = new Semaphore(1);
+
+String message = "";
+public String read(){
+	reader.aquire();
+	String result = message;
+	writer.release();
+	return result;
+}
+
+public void write(String new_message){
+	writer.aquire();
+	message = new_message();
+	reader.release();
+
+}
+
+\end{lstlisting}
+
+\subsubsection{Barriers}
+Java's concurrent library contains an implemented barrier class called CyclicBarrier. Here is a small example on how to use them. The goal is to allow exaclty 10 threads to go into the critical section. The semaphore is used to make sure that no more than 10 threads are allowed in the code block, while the barrier makes sure that there are at least 10 threads in the critical section. Only after the last Thread has reached the semaphore.release() statement, a 10th Thread will be able to enter the barrier.
+
+\begin{lstlisting}
+CyclicBarrier barrier = new CyclicBarrier(10);
+Semaphore semaphore = new Semaphore(10);
+public void method(){
+
+		semaphore.aquire();
+		barrier.await();
+		semaphore.release();
+		//critical section
+		semaphore.release();
+
+	}
+\end{lstlisting}
+
+This is a way to implement your own simple barrier class in Java:
+\begin{lstlisting}
+class MyBarrier{
+        private int n;
+        private int waiting;
+        private int released;
+        private boolean ready;
+        public MyBarrier(int parties){
+                n = parties;
+                waiting = 0;
+                released = 0;
+                ready = true;
+        }
+
+        public synchronized void await() throws InterruptedException{
+                while(!ready){
+                        wait();
+                }
+                waiting ++;
+                while (waiting < n)
+                        wait();
+                ready = false;
+                notifyAll();
+                released++;
+                if(released == n){
+                        waiting = 0;
+                        released = 0;
+                        ready = true;
+                        notifyAll();
+                }
+        }
+
+        public int get_parties(){
+                return n;
+        }
+}
+\end{lstlisting}
+
+\subsection{Erlang}
+\lstset{language=Java}
+\begin{lstlisting}
+	Start() ->
+		Pid = spawn(fun() -> hello() end),
+		Pid ! Hello,
+		Pid ! bye.
+
+	hello() ->
+		receive
+			hello ->
+				io:fwrite("Hello world\n"),
+				hello();
+			bye ->
+				io:fwrite("Bye cruel world\n"),
+				ok
+		end.
+
+
+\end{lstlisting}
+
+
+\subsection{Go}
+
+\begin{lstlisting}
+func main() {
+	msgs := make(chan string)
+	done := make(chan bool)
+
+	go hallo(msgs,done);
+
+\end{lstlisting}
+
+\subsection{Open MP}
+
+\subsection{OPEN CL}
+\subsubsection{About OPEN CL}
+\subsubsection{Model}
+\subsubsection{Kernel}
+A kernel is a block of code, that will be run on the target computing device.
+
+\chapter{Functional Programming}
+
+\chapter{Datastructures}
+
+\section{Arrays}
+\section{Lists}
+\section{Heaps}
+\section{Trees}
+\subsection{Binary Search Tree}
+\subsection{AVL Tree}
+\section{Examples}
+\subsection{Modeling Graphs}
+
+\chapter{Algorithms}
+\section{Sorting}
+\section{Sorting}
+
+\end{comment}
+
+\end{document}
