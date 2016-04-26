@@ -1,3 +1,4 @@
+import java.awt.Point;
 import java.util.Scanner;
 
 public class Hangman {
@@ -6,11 +7,37 @@ public class Hangman {
 	 * this method is invoked. It is static because it is not attached 
 	 * to an instance of the class Hangman. 
 	 */
+	public static void multiplyByScalar(Vector v, double s){
+		v = new Vector(v.x*s, v.y*s, v.z*s);
+	}
+	
 	public static void main(String[] args) {
+		Vector v = new Vector(1,2,3);
+		multiplyByScalar(v, 2.0);;
+		System.out.println(v.x);
+		
+		int[] A = new int[10];
+		int[] B = new int[10];
+		for(int i = 0; i<10; i++){
+		    A[i] = i+1;
+		}
+		for(int i = 0; i<10; i++){
+		    B[A[i]] = A[i];
+		}
+
+		Object o;
+		Hangman h;
+		o = new Object();
+		h = new Hangman("hi");
+		o = h;
+		System.out.println(o);
+		System.out.println(h);
 		// create a new instance of our game with the parameter "Programming"
-		Hangman game = new Hangman("Programming");
+
+		//Hangman game = new Hangman("Programming");
+
 		// run the method start() on our newly initialised game
-		game.start();
+		//game.start();
 	}
 	
 
@@ -46,6 +73,13 @@ public class Hangman {
 		lives = 5;
 		solved = false;
 		in = new Scanner(System.in);
+	
+
+	}
+	
+	@Override
+	public String toString() {
+		return "Hangman";
 	}
 	
 	public void start(){
