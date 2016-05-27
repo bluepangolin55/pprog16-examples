@@ -2,11 +2,10 @@ import java.util.LinkedList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class Sorter<T extends Comparable<T>> {
+	
 	
 	int NTHREADS = 16;
 
@@ -52,62 +51,47 @@ public class Sorter<T extends Comparable<T>> {
 	private void parallelBubbleSortSlow() {
 		LinkedList<Thread> threads = new LinkedList<Thread>();
 		
-		int[] parts = new int[2*NTHREADS + 1];
-		int size = (to - from) / (2*NTHREADS);
-		for(int i=0; i<parts.length; i++){
-			parts[i] = from + size*i;
-		}
-		parts[2*NTHREADS] = to;
-		
-		Lock[] locks = new Lock[2*NTHREADS];
-		for(int i=0; i<2*NTHREADS; i++){
-			locks[i] = new ReentrantLock();
-		}
+		final AtomicInteger end = new AtomicInteger(to);
 		
 		for(int t=0; t<NTHREADS; t++){
 			final int ID = t;
-			final AtomicInteger end = new AtomicInteger(to);
 			threads.add(new Thread(){
 				public void run(){ 
 					boolean swapped = true;
-					int p = 2*ID;
-					int next = (p+1) % NTHREADS;
-					locks[p].lock();
-					locks[next].lock();
-					int i = parts[p] + 1;
+					int localEnd = to;
 					while(swapped){
 						swapped = false;
-						while(i < end.get()) {
-							if(i == parts[next]){
-								locks[p].unlock();
-								p = next;
-								next = (p+1) % NTHREADS;
-								locks[next].lock();
+						for (int i = 1; i < localEnd; i++) {
+//						for (int i = 1; i < end.get(); i++) {
+							while(true){
+								T a = data[i-1];
+								T b = data[i];
+	//							if(data[i-1].compareTo(data[i]) > 0){
+								if(a.compareTo(b) > 0){
+									synchronized(a){
+										synchronized(b){
+											if(a == data[i-1] && b == data[i]){
+												swap(i-1, i);
+												swapped = true;
+												break;
+											}
+										}
+									}
+								}
+								else{
+									break;
+								}
 							}
-							if(data[i-1].compareTo(data[i]) > 0){
-								swap(i-1, i);
-								swapped = true;
-							}
-							i++;
 						}
 						end.decrementAndGet();
-						i = 1;
+						localEnd --;
 					}
-					locks[p].unlock();
-					locks[next].unlock();
 				}
 			});
 		}
 		
-//		for (int i = parts[ID] + 1; i < end; i++) {
-//			if(data[i-1].compareTo(data[i]) > 0){
-//				swap(i-1, i);
-//				swapped = true;
-//			}
-//		}
-		
 		for(Thread t : threads){
-			t.start();
+			t.run();
 		}
 		
 		for(Thread t : threads){
@@ -121,6 +105,7 @@ public class Sorter<T extends Comparable<T>> {
 	}
 
 	private void parallelBubbleSort() {
+		long time = System.currentTimeMillis();
 		LinkedList<Thread> threads = new LinkedList<Thread>();
 		
 		for(int t=0; t<NTHREADS; t++){
@@ -132,10 +117,8 @@ public class Sorter<T extends Comparable<T>> {
 					while(swapped){
 						swapped = false;
 						for (int i = NTHREADS + ID; i < end; i += NTHREADS) {
-							int a = i - NTHREADS;
-							int b = i;
-							if(data[a].compareTo(data[b]) > 0){
-								swap(a, b);
+							if(data[i - NTHREADS].compareTo(data[i]) > 0){
+								swap(i - NTHREADS, i);
 								swapped = true;
 							}
 						}
@@ -145,6 +128,8 @@ public class Sorter<T extends Comparable<T>> {
 			});
 		}
 		
+		System.out.println("setup: " + (System.currentTimeMillis() - time));
+		time = System.currentTimeMillis();
 		for(Thread t : threads){
 			t.start();
 		}
@@ -154,7 +139,10 @@ public class Sorter<T extends Comparable<T>> {
 				t.join();
 			} catch (InterruptedException e) {}
 		}
+		System.out.println("parallel: " + (System.currentTimeMillis() - time));
+		time = System.currentTimeMillis();
 		bubbleSort();
+		System.out.println("sequential: " + (System.currentTimeMillis() - time));
 	}
 	
 	private void swap(int a, int b){
